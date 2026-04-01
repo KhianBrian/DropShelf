@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/khiansismundo/Developer/DropShelf/**)",
+      "Bash(sips -g all /Users/khiansismundo/Developer/DropShelf/.build/DropShelf.app/Contents/Resources/AppIcon.icns)",
+      "Bash(make install:*)",
+      "Bash(pkill DropShelf)"
+    ]
+  }
+}
