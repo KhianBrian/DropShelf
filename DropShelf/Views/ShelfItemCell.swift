@@ -2,6 +2,7 @@ import AppKit
 
 protocol ShelfItemCellDelegate: AnyObject {
     func cellRequestsRemoval(_ cell: ShelfItemCell)
+    func cellBeganDrag(_ cell: ShelfItemCell, event: NSEvent)
 }
 
 final class ShelfItemCell: NSCollectionViewItem {
@@ -82,10 +83,11 @@ final class ShelfItemCell: NSCollectionViewItem {
 
     // MARK: - Configure
 
-    func configure(with item: ShelfItem) {
+    func configure(with item: ShelfItem, angle: CGFloat = 0) {
         shelfItem = item
-        iconView.image      = item.icon
+        iconView.image        = item.icon
         nameLabel.stringValue = item.name
+        view.layer?.transform = CATransform3DMakeRotation(angle, 0, 0, 1)
     }
 
     // MARK: - Hover feedback
@@ -112,6 +114,12 @@ final class ShelfItemCell: NSCollectionViewItem {
     override func mouseExited(with event: NSEvent) {
         deleteBtn.isHidden = true
         view.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+    }
+
+    // MARK: - Drag
+
+    override func mouseDragged(with event: NSEvent) {
+        delegate?.cellBeganDrag(self, event: event)
     }
 
     // MARK: - Removal
@@ -145,35 +153,4 @@ final class ShelfItemCell: NSCollectionViewItem {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
-    // MARK: - Drag source
-
-    override func mouseDragged(with event: NSEvent) {
-        guard let item = shelfItem else { return }
-        let dragItem = NSDraggingItem(pasteboardWriter: item.url as NSURL)
-        dragItem.setDraggingFrame(
-            NSRect(origin: .zero, size: NSSize(width: 52, height: 52)),
-            contents: item.icon
-        )
-        let session = view.beginDraggingSession(with: [dragItem], event: event, source: self)
-        session.animatesToStartingPositionsOnCancelOrFail = true
-    }
-}
-
-// MARK: - NSDraggingSource
-
-extension ShelfItemCell: NSDraggingSource {
-
-    func draggingSession(_ session: NSDraggingSession,
-                         sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
-        context == .outsideApplication ? .copy : .move
-    }
-
-    func draggingSession(_ session: NSDraggingSession,
-                         endedAt screenPoint: NSPoint,
-                         operation: NSDragOperation) {
-        // Remove from shelf after any successful drop
-        if operation != [] {
-            DispatchQueue.main.async { self.delegate?.cellRequestsRemoval(self) }
-        }
-    }
 }
