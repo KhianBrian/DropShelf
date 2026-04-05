@@ -164,7 +164,7 @@ final class ShelfView: NSView {
     }
 
     private func setupEmptyLabel() {
-        emptyLabel = NSTextField(labelWithString: "Shake cursor while dragging\nor drop files here")
+        emptyLabel = NSTextField(labelWithString: "Shake cursor while dragging\nor drop files & screenshots here")
         emptyLabel.alignment   = .center
         emptyLabel.textColor   = .tertiaryLabelColor
         emptyLabel.font        = .systemFont(ofSize: 12)
@@ -183,6 +183,9 @@ final class ShelfView: NSView {
         registerForDraggedTypes([
             .fileURL,
             NSPasteboard.PasteboardType("public.file-url"),
+            .tiff,
+            .png,
+            NSPasteboard.PasteboardType("public.image"),
         ])
     }
 
@@ -230,11 +233,26 @@ final class ShelfView: NSView {
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         setDropHighlight(false)
         let pb = sender.draggingPasteboard
-        guard let urls = pb.readObjects(
+
+        // Prefer file URLs (Finder, saved screenshots, etc.)
+        if let urls = pb.readObjects(
             forClasses: [NSURL.self],
             options: [.urlReadingFileURLsOnly: true]
-        ) as? [URL], !urls.isEmpty else { return false }
+        ) as? [URL], !urls.isEmpty {
+            insertItems(from: urls)
+            return true
+        }
 
+        // Fall back to raw image data (screenshot previews, browser drags, etc.)
+        if let image = NSImage(pasteboard: pb), let url = saveImageToTemp(image) {
+            insertItems(from: [url])
+            return true
+        }
+
+        return false
+    }
+
+    private func insertItems(from urls: [URL]) {
         let start = items.count
         items.append(contentsOf: urls.map { ShelfItem(url: $0) })
         collectionView.performBatchUpdates {
@@ -242,7 +260,22 @@ final class ShelfView: NSView {
             collectionView.insertItems(at: paths)
         }
         updateEmptyState()
-        return true
+    }
+
+    private func saveImageToTemp(_ image: NSImage) -> URL? {
+        guard let tiff   = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiff),
+              let png    = bitmap.representation(using: .png, properties: [:]) else { return nil }
+
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DropShelf", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
+        let url = dir.appendingPathComponent("Screenshot \(formatter.string(from: Date())).png")
+        try? png.write(to: url)
+        return url
     }
 
     // MARK: - Item removal
